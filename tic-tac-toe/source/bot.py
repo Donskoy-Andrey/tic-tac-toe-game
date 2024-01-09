@@ -77,7 +77,7 @@ async def game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     decision = choosing_algorithm(context)
 
     if decision == 0:
-        # No free positions - draw
+        # No free positions - it is a draw
         await update.callback_query.edit_message_text(
             TextConfig.DRAW, reply_markup=reply_markup
         )
@@ -106,7 +106,8 @@ async def game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def end(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, coords: list[tuple[int]]
+    update: Update, context: ContextTypes.DEFAULT_TYPE,
+    coords: list[tuple[int]] | None = None,
 ) -> int:
     """
     Returns `ConversationHandler.END`, which tells
@@ -119,19 +120,23 @@ async def end(
     :return:
         `End` code of the game
     """
+    if coords is None:
+        coords = []
+
+    if len(coords) > 0:
+        # Drawing winning positions
+        for (row, col) in coords:
+            context.user_data['keyboard_state'][row][col] = (
+                context
+                .user_data['keyboard_state'][row][col]
+                .replace(GameConfig.CROSS, GameConfig.CROSS_WINNER)
+                .replace(GameConfig.ZERO, GameConfig.ZERO_WINNER)
+            )
+
+        keyboard = generate_keyboard(context.user_data['keyboard_state'])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.callback_query.edit_message_reply_markup(reply_markup)
+
     chat_id = update.effective_chat.id
-
-    for (row, col) in coords:
-        context.user_data['keyboard_state'][row][col] = (
-            context
-            .user_data['keyboard_state'][row][col]
-            .replace(GameConfig.CROSS, GameConfig.CROSS_WINNER)
-            .replace(GameConfig.ZERO, GameConfig.ZERO_WINNER)
-        )
-
-    keyboard = generate_keyboard(context.user_data['keyboard_state'])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.callback_query.edit_message_reply_markup(reply_markup)
-
     await context.bot.send_message(chat_id=chat_id, text=TextConfig.FINAL_TEXT)
     return ConversationHandler.END
