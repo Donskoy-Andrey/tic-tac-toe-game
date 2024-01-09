@@ -1,0 +1,137 @@
+"""
+Bot for playing tic-tac-toe game with multiple CallbackQueryHandlers.
+"""
+
+from telegram import InlineKeyboardMarkup, Update
+from telegram.ext import ContextTypes, ConversationHandler
+from config.base import GameConfig, TextConfig, ValidateStatus
+from source.utils import generate_keyboard, get_default_state
+from source.core import choosing_algorithm, check_winner, validate_position
+
+from config.logger import Logger
+logger = Logger().get_logger(__name__)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Send message on `/start`.
+
+    :param update: interaction with the user
+    :param context: internal state with params
+    :return:
+        `Continue` code of the game
+    """
+    context.user_data['keyboard_state'] = get_default_state()
+    keyboard = generate_keyboard(context.user_data['keyboard_state'])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        TextConfig.DEFAULT_TEXT, reply_markup=reply_markup
+    )
+    return GameConfig.PLAY
+
+
+async def game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Main processing of the game.
+
+    :param update: interaction with the user
+    :param context: internal state with params
+    :return:
+        `End` or `Continue` code of the game
+    """
+    row, col = map(int, update.callback_query.data)
+
+    # Validation
+    status, message = validate_position(context.user_data['keyboard_state'], row, col)
+
+    if status == ValidateStatus.INCORRECT:
+        keyboard = generate_keyboard(context.user_data['keyboard_state'])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if update.callback_query.message.text != message:
+            await update.callback_query.edit_message_text(
+                message, reply_markup=reply_markup
+            )
+        return GameConfig.PLAY
+
+    # User`s turn
+    context.user_data['keyboard_state'][row][col] = GameConfig.CROSS
+    keyboard = generate_keyboard(context.user_data['keyboard_state'])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.callback_query.edit_message_reply_markup(reply_markup)
+
+    # Check winner after user`s turn
+    winner, coords = check_winner(context.user_data['keyboard_state'])
+    if winner == TextConfig.COMPUTER_NAME:
+        await update.callback_query.edit_message_text(
+            TextConfig.COMPUTER_WON, reply_markup=reply_markup
+        )
+        return await end(update, context, coords)
+    elif winner == TextConfig.USER_NAME:
+        await update.callback_query.edit_message_text(
+            TextConfig.USER_WON, reply_markup=reply_markup
+        )
+        return await end(update, context, coords)
+
+    # Computer`s turn
+    decision = choosing_algorithm(context)
+
+    if decision == 0:
+        # No free positions - draw
+        await update.callback_query.edit_message_text(
+            TextConfig.DRAW, reply_markup=reply_markup
+        )
+        return await end(update, context)
+    else:
+        row, col = decision
+        context.user_data['keyboard_state'][row][col] = GameConfig.ZERO
+        keyboard = generate_keyboard(context.user_data['keyboard_state'])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.callback_query.edit_message_reply_markup(reply_markup)
+
+    # Check winner after computer`s turn
+    winner, coords = check_winner(context.user_data['keyboard_state'])
+    if winner == TextConfig.COMPUTER_NAME:
+        await update.callback_query.edit_message_text(
+            TextConfig.COMPUTER_WON, reply_markup=reply_markup
+        )
+        return await end(update, context, coords)
+    elif winner == TextConfig.USER_NAME:
+        await update.callback_query.edit_message_text(
+            TextConfig.USER_WON, reply_markup=reply_markup
+        )
+        return await end(update, context, coords)
+
+    return GameConfig.PLAY
+
+
+async def end(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, coords: list[tuple[int]]
+) -> int:
+    """
+    Returns `ConversationHandler.END`, which tells
+    the ConversationHandler that the conversation is over.
+    Draw winning positions.
+
+    :param update: interaction with the user
+    :param context: internal state with params
+    :param coords: list of winning coordinates
+    :return:
+        `End` code of the game
+    """
+    chat_id = update.effective_chat.id
+
+    for (row, col) in coords:
+        context.user_data['keyboard_state'][row][col] = (
+            context
+            .user_data['keyboard_state'][row][col]
+            .replace(GameConfig.CROSS, GameConfig.CROSS_WINNER)
+            .replace(GameConfig.ZERO, GameConfig.ZERO_WINNER)
+        )
+
+    keyboard = generate_keyboard(context.user_data['keyboard_state'])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.callback_query.edit_message_reply_markup(reply_markup)
+
+    await context.bot.send_message(chat_id=chat_id, text=TextConfig.FINAL_TEXT)
+    return ConversationHandler.END
