@@ -4,11 +4,11 @@ Bot for playing tic-tac-toe game with multiple CallbackQueryHandlers.
 
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
+from config.logger import Logger
 from config.base import GameConfig, TextConfig, ValidateStatus
 from source.utils import generate_keyboard, get_default_state
 from source.core import choosing_algorithm, check_winner, validate_position
 
-from config.logger import Logger
 logger = Logger().get_logger(__name__)
 
 
@@ -62,16 +62,15 @@ async def game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     # Check winner after user`s turn
     winner, coords = check_winner(context.user_data['keyboard_state'])
-    if winner == TextConfig.COMPUTER_NAME:
-        await update.callback_query.edit_message_text(
-            TextConfig.COMPUTER_WON, reply_markup=reply_markup
-        )
-        return await end(update, context, coords)
-    elif winner == TextConfig.USER_NAME:
-        await update.callback_query.edit_message_text(
-            TextConfig.USER_WON, reply_markup=reply_markup
-        )
-        return await end(update, context, coords)
+    for possible_winner, text_winner in zip(
+        [TextConfig.COMPUTER_NAME, TextConfig.USER_NAME],
+        [TextConfig.COMPUTER_WON, TextConfig.USER_WON]
+    ):
+        if winner == possible_winner:
+            await update.callback_query.edit_message_text(
+                text_winner, reply_markup=reply_markup
+            )
+            return await end(update, context, coords)
 
     # Computer`s turn
     decision = choosing_algorithm(context)
@@ -82,25 +81,24 @@ async def game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             TextConfig.DRAW, reply_markup=reply_markup
         )
         return await end(update, context)
-    else:
-        row, col = decision
-        context.user_data['keyboard_state'][row][col] = GameConfig.ZERO
-        keyboard = generate_keyboard(context.user_data['keyboard_state'])
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.callback_query.edit_message_reply_markup(reply_markup)
+
+    row, col = decision
+    context.user_data['keyboard_state'][row][col] = GameConfig.ZERO
+    keyboard = generate_keyboard(context.user_data['keyboard_state'])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.callback_query.edit_message_reply_markup(reply_markup)
 
     # Check winner after computer`s turn
     winner, coords = check_winner(context.user_data['keyboard_state'])
-    if winner == TextConfig.COMPUTER_NAME:
-        await update.callback_query.edit_message_text(
-            TextConfig.COMPUTER_WON, reply_markup=reply_markup
-        )
-        return await end(update, context, coords)
-    elif winner == TextConfig.USER_NAME:
-        await update.callback_query.edit_message_text(
-            TextConfig.USER_WON, reply_markup=reply_markup
-        )
-        return await end(update, context, coords)
+    for possible_winner, text_winner in zip(
+        [TextConfig.COMPUTER_NAME, TextConfig.USER_NAME],
+        [TextConfig.COMPUTER_WON, TextConfig.USER_WON]
+    ):
+        if winner == possible_winner:
+            await update.callback_query.edit_message_text(
+                text_winner, reply_markup=reply_markup
+            )
+            return await end(update, context, coords)
 
     return GameConfig.PLAY
 

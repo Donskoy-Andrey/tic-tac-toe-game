@@ -2,9 +2,9 @@
 
 from copy import deepcopy
 from config.base import DEFAULT_STATE
+from config.logger import Logger
 from telegram import InlineKeyboardButton
 
-from config.logger import Logger
 logger = Logger().get_logger(__name__)
 
 

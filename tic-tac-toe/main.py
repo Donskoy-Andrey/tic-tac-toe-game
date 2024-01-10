@@ -5,9 +5,9 @@ from telegram.ext import (
     Application, CallbackQueryHandler, CommandHandler, ConversationHandler
 )
 from config.base import GameConfig
+from config.logger import Logger
 from source.bot import start, game
 
-from config.logger import Logger
 logger = Logger().get_logger(__name__)
 
 

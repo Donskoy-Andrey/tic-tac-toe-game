@@ -1,3 +1,5 @@
+"""Logging stuff"""
+
 import logging
 from config.base import LoggerConfig
 
